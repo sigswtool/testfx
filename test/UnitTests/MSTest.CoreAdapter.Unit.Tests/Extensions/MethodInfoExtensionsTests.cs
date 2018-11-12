@@ -10,7 +10,9 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Extensions
     using System;
     using System.Reflection;
     using System.Threading.Tasks;
+    using Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter;
     using Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Extensions;
+    using Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.ObjectModel;
     using Assert = FrameworkV1::Microsoft.VisualStudio.TestTools.UnitTesting.Assert;
     using StringAssert = FrameworkV1::Microsoft.VisualStudio.TestTools.UnitTesting.StringAssert;
     using TestClass = FrameworkV1::Microsoft.VisualStudio.TestTools.UnitTesting.TestClassAttribute;
@@ -73,6 +75,13 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Extensions
         }
 
         [TestMethod]
+        public void HasCorrectClassOrAssemblyInitializeSignatureShouldReturnTrueForTestMethodsWithoutAsync()
+        {
+            var methodInfo = typeof(DummyTestClass).GetMethod("PublicStaticNonAsyncTaskMethodWithTC");
+            Assert.IsTrue(methodInfo.HasCorrectClassOrAssemblyInitializeSignature());
+        }
+
+        [TestMethod]
         public void HasCorrectClassOrAssemblyInitializeSignatureShouldReturnFalseForAsyncTestMethodsWithNonTaskReturnTypes()
         {
             var methodInfo = typeof(DummyTestClass).GetMethod("PublicStaticAsyncVoidMethodWithTC");
@@ -126,6 +135,13 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Extensions
         }
 
         [TestMethod]
+        public void HasCorrectClassOrAssemblyCleanupSignatureShouldReturnTrueForTestMethodsWithoutAsync()
+        {
+            var methodInfo = typeof(DummyTestClass).GetMethod("PublicStaticNonAsyncTaskMethod");
+            Assert.IsTrue(methodInfo.HasCorrectClassOrAssemblyCleanupSignature());
+        }
+
+        [TestMethod]
         public void HasCorrectClassOrAssemblyCleanupSignatureShouldReturnFalseForAsyncTestMethodsWithNonTaskReturnTypes()
         {
             var methodInfo = typeof(DummyTestClass).GetMethod("PublicStaticAsyncVoidMethod");
@@ -175,6 +191,13 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Extensions
         public void HasCorrectTestInitializeOrCleanupSignatureShouldReturnTrueForAsyncTestMethods()
         {
             var methodInfo = typeof(DummyTestClass).GetMethod("PublicAsyncTaskMethod");
+            Assert.IsTrue(methodInfo.HasCorrectTestInitializeOrCleanupSignature());
+        }
+
+        [TestMethod]
+        public void HasCorrectTestInitializeOrCleanupSignatureShouldReturnTrueForTestMethodsWithoutAsync()
+        {
+            var methodInfo = typeof(DummyTestClass).GetMethod("PublicNonAsyncTaskMethod");
             Assert.IsTrue(methodInfo.HasCorrectTestInitializeOrCleanupSignature());
         }
 
@@ -246,6 +269,13 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Extensions
         }
 
         [TestMethod]
+        public void HasCorrectTestMethodSignatureShouldReturnTrueForTaskTestMethodsWithoutAsync()
+        {
+            var methodInfo = typeof(DummyTestClass).GetMethod("PublicNonAsyncTaskMethod");
+            Assert.IsTrue(methodInfo.HasCorrectTestMethodSignature(false));
+        }
+
+        [TestMethod]
         public void HasCorrectTestMethodSignatureShouldReturnFalseForAsyncTestMethodsWithNonTaskReturnTypes()
         {
             var methodInfo = typeof(DummyTestClass).GetMethod("PublicAsyncVoidMethod");
@@ -292,6 +322,13 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Extensions
         public void IsVoidOrTaskReturnTypeShouldReturnTrueForAsyncTaskMethods()
         {
             var methodInfo = typeof(DummyTestClass).GetMethod("PublicAsyncTaskMethod");
+            Assert.IsTrue(methodInfo.IsVoidOrTaskReturnType());
+        }
+
+        [TestMethod]
+        public void IsVoidOrTaskReturnTypeShouldReturnTrueForTaskMethodsWithoutAsync()
+        {
+            var methodInfo = typeof(DummyTestClass).GetMethod("PublicNonAsyncTaskMethod");
             Assert.IsTrue(methodInfo.IsVoidOrTaskReturnType());
         }
 
@@ -363,12 +400,41 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Extensions
                 return true;
             };
 
+            var methodInfo = typeof(DummyTestClass).GetMethod("PublicMethod");
+
             var dummyTestClass = new DummyTestClass2();
             var dummyMethod = typeof(DummyTestClass2).GetMethod("DummyMethod");
 
             dummyMethod.InvokeAsSynchronousTask(dummyTestClass, 10, 20);
 
             Assert.IsTrue(testMethodCalled);
+        }
+
+        [TestMethod]
+        public void InvokeAsSynchronousShouldThrowIfParametersWereExpectedButWereNotProvided()
+        {
+            var dummyTestClass = new DummyTestClass2();
+            var dummyMethod = typeof(DummyTestClass2).GetMethod("PublicMethodWithParameters");
+            try
+            {
+                // Should throw exception of type TestFailedException
+                dummyMethod.InvokeAsSynchronousTask(dummyTestClass, null);
+            }
+            catch (TestFailedException ex)
+            {
+                Assert.AreEqual(ex.Outcome, UnitTestOutcome.Error);
+                Assert.AreEqual(ex.TryGetMessage(), Resource.UTA_TestMethodExpectedParameters);
+            }
+        }
+
+        [TestMethod]
+        public void InvokeAsSynchronousShouldNotThrowIfParametersWereExpectedAndWereProvided()
+        {
+            var dummyTestClass = new DummyTestClass2();
+            var dummyMethod = typeof(DummyTestClass2).GetMethod("PublicMethodWithParameters");
+
+            Action action = () => dummyMethod.InvokeAsSynchronousTask(dummyTestClass, 10, 20);
+            action();
         }
 
         #endregion
@@ -389,6 +455,12 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Extensions
             public async Task DummyAsyncMethod(int x, int y)
             {
                 await DummyAsyncMethodBody(x, y);
+            }
+
+            public void PublicMethodWithParameters(int x, int y)
+            {
+                Assert.IsNotNull(x);
+                Assert.IsNotNull(y);
             }
         }
 
@@ -416,6 +488,11 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Extensions
                 await Task.FromResult(true);
             }
 
+            public static Task PublicStaticNonAsyncTaskMethodWithTC(UTFExtension.TestContext tc)
+            {
+                return Task.FromResult(true);
+            }
+
             public static async void PublicStaticAsyncVoidMethodWithTC(UTFExtension.TestContext tc)
             {
                 await Task.FromResult(true);
@@ -434,6 +511,11 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Extensions
             public static async void PublicStaticAsyncVoidMethod()
             {
                 await Task.FromResult(true);
+            }
+
+            public static Task PublicStaticNonAsyncTaskMethod()
+            {
+                return Task.FromResult(true);
             }
 
             public void PublicMethod()
@@ -463,6 +545,11 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Extensions
             public async void PublicAsyncVoidMethod()
             {
                 await Task.FromResult(true);
+            }
+
+            public Task PublicNonAsyncTaskMethod()
+            {
+                return Task.FromResult(true);
             }
 
             [UTF.Timeout(-11)]

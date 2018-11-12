@@ -214,7 +214,7 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter
         /// <returns> Returns true if test settings is provided.. </returns>
         public static bool IsLegacyScenario(IMessageLogger logger)
         {
-            if (CurrentSettings.ForcedLegacyMode || !string.IsNullOrEmpty(CurrentSettings.TestSettingsFile))
+            if (!string.IsNullOrEmpty(CurrentSettings.TestSettingsFile))
             {
                 logger.SendMessage(TestMessageLevel.Warning, Resource.LegacyScenariosNotSupportedWarning);
                 return true;
@@ -281,7 +281,7 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter
             //     <CaptureTraceOutput>true</CaptureTraceOutput>
             //     <MapInconclusiveToFailed>false</MapInconclusiveToFailed>
             //     <EnableBaseClassTestMethodsFromOtherAssemblies>false</EnableBaseClassTestMethodsFromOtherAssemblies>
-            //     <TestTimeout>5000<TestTimeout>
+            //     <TestTimeout>5000</TestTimeout>
             //     <Parallelize>
             //        <Workers>4</Workers>
             //        <Scope>TestClass</Scope>
