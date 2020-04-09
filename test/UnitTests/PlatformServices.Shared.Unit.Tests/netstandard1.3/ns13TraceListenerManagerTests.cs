@@ -3,7 +3,7 @@
 
 namespace MSTestAdapter.PlatformServices.UnitTests.Services
 {
-#if NETCOREAPP1_0
+#if NETCOREAPP1_1
     using Microsoft.VisualStudio.TestTools.UnitTesting;
 #else
     extern alias FrameworkV1;
@@ -70,7 +70,7 @@ namespace MSTestAdapter.PlatformServices.UnitTests.Services
             traceListenerManager.Add(traceListener);
             traceListenerManager.Dispose(traceListener);
 
-            // Tring to write after closing textWriter should throw exception
+            // Trying to write after closing textWriter should throw exception
             Action shouldThrowException = () => writer.WriteLine("Try to write something");
             ActionUtility.ActionShouldThrowExceptionOfType(shouldThrowException, typeof(ObjectDisposedException));
         }

@@ -3,7 +3,7 @@
 
 namespace MSTestAdapter.PlatformServices.Tests.Services
 {
-#if NETCOREAPP1_0
+#if NETCOREAPP1_1
     using Microsoft.VisualStudio.TestTools.UnitTesting;
 #else
     extern alias FrameworkV1;
@@ -20,14 +20,10 @@ namespace MSTestAdapter.PlatformServices.Tests.Services
 
     using System.Collections.Generic;
     using System.IO;
-    using System.Linq;
 
     using Microsoft.VisualStudio.TestPlatform.MSTestAdapter.PlatformServices;
-    using Microsoft.VisualStudio.TestPlatform.MSTestAdapter.PlatformServices.Interface.ObjectModel;
     using Moq;
     using ITestMethod = Microsoft.VisualStudio.TestPlatform.MSTestAdapter.PlatformServices.Interface.ObjectModel.ITestMethod;
-
-#pragma warning disable SA1649 // SA1649FileNameMustMatchTypeName
 
     [TestClass]
     public class TestContextImplementationTests
@@ -48,7 +44,7 @@ namespace MSTestAdapter.PlatformServices.Tests.Services
         [TestMethod]
         public void TestContextConstructorShouldInitializeProperties()
         {
-            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, new System.IO.StringWriter(), this.properties);
+            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, new StringWriter(), this.properties);
 
             Assert.IsNotNull(this.testContextImplementation.Properties);
         }
@@ -59,22 +55,22 @@ namespace MSTestAdapter.PlatformServices.Tests.Services
             this.testMethod.Setup(tm => tm.FullClassName).Returns("A.C.M");
             this.testMethod.Setup(tm => tm.Name).Returns("M");
 
-            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, new System.IO.StringWriter(), this.properties);
+            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, new StringWriter(), this.properties);
 
             Assert.IsNotNull(this.testContextImplementation.Properties);
 
             CollectionAssert.Contains(
-                this.testContextImplementation.Properties.ToList(),
+                this.testContextImplementation.Properties,
                 new KeyValuePair<string, object>("FullyQualifiedTestClassName", "A.C.M"));
             CollectionAssert.Contains(
-                this.testContextImplementation.Properties.ToList(),
+                this.testContextImplementation.Properties,
                 new KeyValuePair<string, object>("TestName", "M"));
         }
 
         [TestMethod]
         public void CurrentTestOutcomeShouldReturnDefaultOutcome()
         {
-            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, new System.IO.StringWriter(), this.properties);
+            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, new StringWriter(), this.properties);
 
             Assert.AreEqual(UnitTestOutcome.Failed, this.testContextImplementation.CurrentTestOutcome);
         }
@@ -82,7 +78,7 @@ namespace MSTestAdapter.PlatformServices.Tests.Services
         [TestMethod]
         public void CurrentTestOutcomeShouldReturnOutcomeSet()
         {
-            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, new System.IO.StringWriter(), this.properties);
+            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, new StringWriter(), this.properties);
 
             this.testContextImplementation.SetOutcome(UnitTestOutcome.InProgress);
 
@@ -94,7 +90,7 @@ namespace MSTestAdapter.PlatformServices.Tests.Services
         {
             this.testMethod.Setup(tm => tm.FullClassName).Returns("A.C.M");
 
-            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, new System.IO.StringWriter(), this.properties);
+            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, new StringWriter(), this.properties);
 
             Assert.AreEqual("A.C.M", this.testContextImplementation.FullyQualifiedTestClassName);
         }
@@ -104,7 +100,7 @@ namespace MSTestAdapter.PlatformServices.Tests.Services
         {
             this.testMethod.Setup(tm => tm.Name).Returns("M");
 
-            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, new System.IO.StringWriter(), this.properties);
+            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, new StringWriter(), this.properties);
 
             Assert.AreEqual("M", this.testContextImplementation.TestName);
         }
@@ -118,10 +114,10 @@ namespace MSTestAdapter.PlatformServices.Tests.Services
             this.properties.Add(property1);
             this.properties.Add(property2);
 
-            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, new System.IO.StringWriter(), this.properties);
+            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, new StringWriter(), this.properties);
 
-            CollectionAssert.Contains(this.testContextImplementation.Properties.ToList(), property1);
-            CollectionAssert.Contains(this.testContextImplementation.Properties.ToList(), property2);
+            CollectionAssert.Contains(this.testContextImplementation.Properties, property1);
+            CollectionAssert.Contains(this.testContextImplementation.Properties, property2);
         }
 
         [TestMethod]
@@ -129,7 +125,7 @@ namespace MSTestAdapter.PlatformServices.Tests.Services
         {
             this.testMethod.Setup(tm => tm.Name).Returns("M");
 
-            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, new System.IO.StringWriter(), this.properties);
+            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, new StringWriter(), this.properties);
 
             Assert.IsNotNull(this.testContextImplementation.Context);
             Assert.AreEqual("M", this.testContextImplementation.Context.TestName);
@@ -140,35 +136,99 @@ namespace MSTestAdapter.PlatformServices.Tests.Services
         {
             this.testMethod.Setup(tm => tm.Name).Returns("M");
 
-            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, new System.IO.StringWriter(), this.properties);
-
-            object propValue;
-
-            Assert.IsTrue(this.testContextImplementation.TryGetPropertyValue("TestName", out propValue));
+            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, new StringWriter(), this.properties);
+            Assert.IsTrue(this.testContextImplementation.TryGetPropertyValue("TestName", out object propValue));
             Assert.AreEqual("M", propValue);
         }
 
         [TestMethod]
         public void TryGetPropertyValueShouldReturnFalseIfPropertyIsNotPresent()
         {
-            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, new System.IO.StringWriter(), this.properties);
-
-            object propValue;
-
-            Assert.IsFalse(this.testContextImplementation.TryGetPropertyValue("Random", out propValue));
+            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, new StringWriter(), this.properties);
+            Assert.IsFalse(this.testContextImplementation.TryGetPropertyValue("Random", out object propValue));
             Assert.IsNull(propValue);
         }
 
         [TestMethod]
         public void AddPropertyShouldAddPropertiesToThePropertyBag()
         {
-            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, new System.IO.StringWriter(), this.properties);
+            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, new StringWriter(), this.properties);
 
             this.testContextImplementation.AddProperty("SomeNewProperty", "SomeValue");
 
             CollectionAssert.Contains(
-                this.testContextImplementation.Properties.ToList(),
+                this.testContextImplementation.Properties,
                 new KeyValuePair<string, object>("SomeNewProperty", "SomeValue"));
+        }
+
+        [TestMethod]
+        public void WriteShouldWriteToStringWriter()
+        {
+            var stringWriter = new StringWriter();
+            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, stringWriter, this.properties);
+            this.testContextImplementation.Write("{0} Testing write", 1);
+            StringAssert.Contains(stringWriter.ToString(), "1 Testing write");
+        }
+
+        [TestMethod]
+        public void WriteShouldWriteToStringWriterForNullCharacters()
+        {
+            var stringWriter = new StringWriter();
+            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, stringWriter, this.properties);
+            this.testContextImplementation.Write("{0} Testing \0 write \0", 1);
+            StringAssert.Contains(stringWriter.ToString(), "1 Testing \\0 write \\0");
+        }
+
+        [TestMethod]
+        public void WriteShouldNotThrowIfStringWriterIsDisposed()
+        {
+            var stringWriter = new StringWriter();
+            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, stringWriter, this.properties);
+            stringWriter.Dispose();
+            this.testContextImplementation.Write("{0} Testing write", 1);
+
+            // Calling it twice to cover the direct return when we know the object has been disposed.
+            this.testContextImplementation.Write("{0} Testing write", 1);
+        }
+
+        [TestMethod]
+        public void WriteWithMessageShouldWriteToStringWriter()
+        {
+            var stringWriter = new StringWriter();
+            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, stringWriter, this.properties);
+            this.testContextImplementation.Write("1 Testing write");
+            StringAssert.Contains(stringWriter.ToString(), "1 Testing write");
+        }
+
+        [TestMethod]
+        public void WriteWithMessageShouldWriteToStringWriterForNullCharacters()
+        {
+            var stringWriter = new StringWriter();
+            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, stringWriter, this.properties);
+            this.testContextImplementation.Write("1 Testing \0 write \0");
+            StringAssert.Contains(stringWriter.ToString(), "1 Testing \\0 write \\0");
+        }
+
+        [TestMethod]
+        public void WriteWithMessageShouldNotThrowIfStringWriterIsDisposed()
+        {
+            var stringWriter = new StringWriter();
+            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, stringWriter, this.properties);
+            stringWriter.Dispose();
+            this.testContextImplementation.Write("1 Testing write");
+
+            // Calling it twice to cover the direct return when we know the object has been disposed.
+            this.testContextImplementation.Write("1 Testing write");
+        }
+
+        [TestMethod]
+        public void WriteWithMessageShouldWriteToStringWriterForReturnCharacters()
+        {
+            var stringWriter = new StringWriter();
+            this.testContextImplementation = new TestContextImplementation(this.testMethod.Object, stringWriter, this.properties);
+            this.testContextImplementation.Write("2 Testing write \n\r");
+            this.testContextImplementation.Write("3 Testing write\n\r");
+            StringAssert.Equals(stringWriter.ToString(), "2 Testing write 3 Testing write");
         }
 
         [TestMethod]

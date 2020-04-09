@@ -177,7 +177,7 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Execution
         }
 
         [TestMethodV1]
-        public void RunTestsForCancellationTokenCancelledSetToTrueShouldSendZeroResults()
+        public void RunTestsForCancellationTokencanceledSetToTrueShouldSendZeroResults()
         {
             var testCase = this.GetTestCase(typeof(DummyTestClass), "PassingTest");
 
@@ -357,14 +357,14 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Execution
             // Trigger another Run
             this.TestExecutionManager.RunTests(tests, this.runContext, this.frameworkHandle, new TestRunCancellationToken());
 
-            Assert.AreEqual(DummyTestClass.TestContextProperties["webAppUrl"], "http://updatedLocalHost");
+            Assert.AreEqual("http://updatedLocalHost", DummyTestClass.TestContextProperties["webAppUrl"]);
         }
 
         #endregion
 
         #region Run Tests on Sources
 
-        // Todo: This tests needs to be mocked.
+        // TODO: This tests needs to be mocked.
         [Ignore]
         [TestMethodV1]
         public void RunTestsForSourceShouldRunTestsInASource()
@@ -378,7 +378,7 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Execution
             CollectionAssert.Contains(this.frameworkHandle.ResultsList, "PassingTest  Passed");
         }
 
-        // Todo: This tests needs to be mocked.
+        // TODO: This tests needs to be mocked.
         [Ignore]
         [TestMethodV1]
         public void RunTestsForSourceShouldPassInTestRunParametersInformationAsPropertiesToTheTest()
@@ -426,7 +426,7 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Execution
             };
 
             testableTestExecutionmanager.RunTests(sources, this.runContext, this.frameworkHandle, this.cancellationToken);
-            Assert.AreEqual(testsCount, 4);
+            Assert.AreEqual(4, testsCount);
         }
 
         #endregion
@@ -440,8 +440,8 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Execution
             UnitTestResult unitTestResult1 = new UnitTestResult() { DatarowIndex = 0, DisplayName = "DummyTest" };
             UnitTestResult unitTestResult2 = new UnitTestResult() { DatarowIndex = 1, DisplayName = "DummyTest" };
             this.TestExecutionManager.SendTestResults(testCase, new UnitTestResult[] { unitTestResult1, unitTestResult2 }, default(DateTimeOffset), default(DateTimeOffset), this.frameworkHandle);
-            Assert.AreEqual(this.frameworkHandle.TestDisplayNameList[0], "DummyTest (Data Row 0)");
-            Assert.AreEqual(this.frameworkHandle.TestDisplayNameList[1], "DummyTest (Data Row 1)");
+            Assert.AreEqual("DummyTest (Data Row 0)", this.frameworkHandle.TestDisplayNameList[0]);
+            Assert.AreEqual("DummyTest (Data Row 1)", this.frameworkHandle.TestDisplayNameList[1]);
         }
 
         #endregion
@@ -883,7 +883,7 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Execution
             [UTF.TestCategory("Foo")]
             public void PassingTest()
             {
-                TestContextProperties = this.TestContext.Properties;
+                TestContextProperties = this.TestContext.Properties as IDictionary<string, object>;
             }
 
             [UTF.TestMethod]
@@ -937,16 +937,16 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Execution
             [UTF.TestMethod]
             public void TestMethod1()
             {
-                // Ensures stability.
-                System.Threading.Thread.Sleep(500);
+                // Ensures stability.. for the thread to be not used for another test method
+                System.Threading.Thread.Sleep(2000);
                 threadIds.Add(Thread.CurrentThread.ManagedThreadId);
             }
 
             [UTF.TestMethod]
             public void TestMethod2()
             {
-                // Ensures stability.
-                System.Threading.Thread.Sleep(500);
+                // Ensures stability.. for the thread to be not used for another test method
+                System.Threading.Thread.Sleep(2000);
                 threadIds.Add(Thread.CurrentThread.ManagedThreadId);
             }
         }
@@ -972,12 +972,16 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Execution
             [UTF.TestMethod]
             public void TestMethod1()
             {
+                // Ensures stability.. for the thread to be not used for another test method
+                System.Threading.Thread.Sleep(2000);
                 threadIds.Add(Thread.CurrentThread.ManagedThreadId);
             }
 
             [UTF.TestMethod]
             public void TestMethod2()
             {
+                // Ensures stability.. for the thread to be not used for another test method
+                System.Threading.Thread.Sleep(2000);
                 threadIds.Add(Thread.CurrentThread.ManagedThreadId);
             }
         }
@@ -1003,6 +1007,8 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Execution
             [UTF.TestMethod]
             public void TestMethod1()
             {
+                // Ensures stability.. for the thread to be not used for another test method
+                Thread.Sleep(2000);
                 threadIds.Add(Thread.CurrentThread.ManagedThreadId);
             }
         }
@@ -1054,6 +1060,8 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Execution
             [UTF.TestMethod]
             public void TestMethod1()
             {
+                // Ensures stability.. for the thread to be not used for another test method
+                Thread.Sleep(2000);
                 parallelizableTestsThreadIds.Add(Thread.CurrentThread.ManagedThreadId);
                 threadApartmentStates.Add(Thread.CurrentThread.GetApartmentState());
 
@@ -1063,6 +1071,8 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Execution
             [UTF.TestMethod]
             public void TestMethod2()
             {
+                // Ensures stability.. for the thread to be not used for another test method
+                Thread.Sleep(2000);
                 parallelizableTestsThreadIds.Add(Thread.CurrentThread.ManagedThreadId);
                 threadApartmentStates.Add(Thread.CurrentThread.GetApartmentState());
 

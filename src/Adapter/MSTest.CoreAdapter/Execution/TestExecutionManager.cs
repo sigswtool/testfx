@@ -59,7 +59,7 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution
         /// <param name="tests">Tests to be run.</param>
         /// <param name="runContext">Context to use when executing the tests.</param>
         /// <param name="frameworkHandle">Handle to the framework to record results and to do framework operations.</param>
-        /// <param name="runCancellationToken">Test run cancellation tokenn</param>
+        /// <param name="runCancellationToken">Test run cancellation token</param>
         public void RunTests(IEnumerable<TestCase> tests, IRunContext runContext, IFrameworkHandle frameworkHandle, TestRunCancellationToken runCancellationToken)
         {
             Debug.Assert(tests != null, "tests");
@@ -161,7 +161,7 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution
                     continue;
                 }
 
-                var testResult = unitTestResult.ToTestResult(test, startTime, endTime, MSTestSettings.CurrentSettings.MapInconclusiveToFailed);
+                var testResult = unitTestResult.ToTestResult(test, startTime, endTime, MSTestSettings.CurrentSettings);
 
                 if (unitTestResult.DatarowIndex >= 0)
                 {
@@ -222,9 +222,6 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution
                     typeof(UnitTestRunner),
                     new object[] { MSTestSettings.CurrentSettings }) as UnitTestRunner;
 
-                // After loading adapter reset the chils-domain's appbase to point to test source location
-                isolationHost.UpdateAppBaseToTestSourceLocation();
-
                 PlatformServiceProvider.Instance.AdapterTraceLogger.LogInfo("Created unit-test runner {0}", source);
 
                 // Default test set is filtered tests based on user provided filter criteria
@@ -238,7 +235,7 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution
 
                 testsToRun = tests.Where(t => MatchTestFilter(filterExpression, t, this.TestMethodFilter));
 
-                // this is done so that appropriate values of testcontext properties are set at source level
+                // this is done so that appropriate values of test context properties are set at source level
                 // and are merged with session level parameters
                 var sourceLevelParameters = PlatformServiceProvider.Instance.SettingsProvider.GetProperties(source);
 
@@ -247,11 +244,22 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution
                     sourceLevelParameters = sourceLevelParameters.Concat(this.sessionParameters).ToDictionary(x => x.Key, x => x.Value);
                 }
 
-                var sourceSettingsProvider = isolationHost.CreateInstanceForType(
-                    typeof(TestAssemblySettingsProvider),
-                    null) as TestAssemblySettingsProvider;
+                TestAssemblySettingsProvider sourceSettingsProvider = null;
 
-                var sourceSettings = sourceSettingsProvider.GetSettings(source);
+                try
+                {
+                    sourceSettingsProvider = isolationHost.CreateInstanceForType(
+                        typeof(TestAssemblySettingsProvider),
+                        null) as TestAssemblySettingsProvider;
+                }
+                catch (Exception ex)
+                {
+                    PlatformServiceProvider.Instance.AdapterTraceLogger.LogInfo(
+                        "Could not create TestAssemblySettingsProvider instance in child app-domain",
+                        ex);
+                }
+
+                var sourceSettings = (sourceSettingsProvider != null) ? sourceSettingsProvider.GetSettings(source) : new TestAssemblySettings();
                 var parallelWorkers = sourceSettings.Workers;
                 var parallelScope = sourceSettings.Scope;
 

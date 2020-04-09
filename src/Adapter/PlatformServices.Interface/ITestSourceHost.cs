@@ -4,7 +4,6 @@
 namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.PlatformServices.Interface
 {
     using System;
-    using Microsoft.VisualStudio.TestPlatform.ObjectModel.Adapter;
 
     /// <summary>
     /// A host that loads the test source.This can be in isolation for desktop using an AppDomain or just loading the source in the current context.
@@ -27,10 +26,5 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.PlatformServices.Int
         /// <returns> An instance of the type created in the host. </returns>
         /// <remarks> If a type is to be created in isolation then it needs to be a MarshalByRefObject. </remarks>
         object CreateInstanceForType(Type type, object[] args);
-
-        /// <summary>
-        /// Updates child-domain's appbase to point to test source location
-        /// </summary>
-        void UpdateAppBaseToTestSourceLocation();
     }
 }

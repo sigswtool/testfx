@@ -4,8 +4,6 @@
 namespace Microsoft.MSTestV2.CLIAutomation
 {
     using System;
-    using System.Collections.Generic;
-    using System.Configuration;
     using System.IO;
     using System.Linq;
     using System.Xml;
@@ -77,6 +75,10 @@ namespace Microsoft.MSTestV2.CLIAutomation
             // this step of Initializing extensions should not be required after this issue: https://github.com/Microsoft/vstest/issues/236 is fixed
             vsTestConsoleWrapper.InitializeExtensions(Directory.GetFiles(this.GetTestAdapterPath(), "*TestAdapter.dll"));
             vsTestConsoleWrapper.RunTests(sources, runSettingXml, new TestPlatformOptions { TestCaseFilter = testCaseFilter }, this.runEventsHandler);
+            if (this.runEventsHandler.Errors.Any())
+            {
+                throw new Exception($"Run failed with {this.runEventsHandler.Errors.Count} errors:{Environment.NewLine}{string.Join(Environment.NewLine, this.runEventsHandler.Errors)}");
+            }
         }
 
         /// <summary>
@@ -103,7 +105,7 @@ namespace Microsoft.MSTestV2.CLIAutomation
             {
                 var flag = this.discoveryEventsHandler.Tests.Contains(test)
                            || this.discoveryEventsHandler.Tests.Contains(GetTestMethodName(test));
-                Assert.IsTrue(flag, "Test {0} does not appear in discovered tests list.", test);
+                Assert.IsTrue(flag, "Test '{0}' does not appear in discovered tests list.", test);
             }
 
             // Make sure only expected number of tests are discovered and not more.
@@ -117,10 +119,14 @@ namespace Microsoft.MSTestV2.CLIAutomation
         /// <remarks>Provide the full test name similar to this format SampleTest.TestCode.TestMethodPass.</remarks>
         public void ValidatePassedTests(params string[] passedTests)
         {
-            // Make sure only expected number of tests passed and not more.
-            Assert.AreEqual(passedTests.Length, this.runEventsHandler.PassedTests.Count);
-
+            this.ValidatePassedTestsCount(passedTests.Length);
             this.ValidatePassedTestsContain(passedTests);
+        }
+
+        public void ValidatePassedTestsCount(int expectedPassedTestsCount)
+        {
+            // Make sure only expected number of tests passed and not more.
+            Assert.AreEqual(expectedPassedTestsCount, this.runEventsHandler.PassedTests.Count);
         }
 
         /// <summary>
@@ -135,7 +141,7 @@ namespace Microsoft.MSTestV2.CLIAutomation
         public void ValidateFailedTests(string source, params string[] failedTests)
         {
             this.ValidateFailedTestsCount(failedTests.Length);
-            this.ValidateFailedTestsContain(source, failedTests);
+            this.ValidateFailedTestsContain(source, true, failedTests);
         }
 
         /// <summary>
@@ -168,12 +174,15 @@ namespace Microsoft.MSTestV2.CLIAutomation
         /// <remarks>Provide the full test name similar to this format SampleTest.TestCode.TestMethodPass.</remarks>
         public void ValidatePassedTestsContain(params string[] passedTests)
         {
+            var passedTestResults = this.runEventsHandler.PassedTests.ToList();
             foreach (var test in passedTests)
             {
-                var testFound = this.runEventsHandler.PassedTests.Any(
+                var testFound = passedTestResults.Any(
                     p => test.Equals(p.TestCase?.FullyQualifiedName)
-                         || test.Equals(p.DisplayName));
-                Assert.IsTrue(testFound, "Test {0} does not appear in passed tests list.", test);
+                         || test.Equals(p.DisplayName)
+                         || test.Equals(p.TestCase.DisplayName));
+
+                Assert.IsTrue(testFound, "Test '{0}' does not appear in passed tests list.", test);
             }
         }
 
@@ -181,22 +190,28 @@ namespace Microsoft.MSTestV2.CLIAutomation
         /// Validates if the test results contains the specified set of failed tests.
         /// </summary>
         /// <param name="source">The test container.</param>
+        /// <param name="validateStackTraceInfo">Validates the existence of stack trace when set to true</param>
         /// <param name="failedTests">Set of failed tests.</param>
         /// <remarks>
         /// Provide the full test name similar to this format SampleTest.TestCode.TestMethodFailed.
         /// Also validates whether these tests have stack trace info.
         /// </remarks>
-        public void ValidateFailedTestsContain(string source, params string[] failedTests)
+        public void ValidateFailedTestsContain(string source, bool validateStackTraceInfo, params string[] failedTests)
         {
             foreach (var test in failedTests)
             {
                 var testFound = this.runEventsHandler.FailedTests.FirstOrDefault(f => test.Equals(f.TestCase?.FullyQualifiedName) ||
                            test.Equals(f.DisplayName));
-                Assert.IsNotNull(testFound, "Test {0} does not appear in failed tests list.", test);
+                Assert.IsNotNull(testFound, "Test '{0}' does not appear in failed tests list.", test);
 
                 // Skipping this check for x64 as of now. https://github.com/Microsoft/testfx/issues/60 should fix this.
-                if (source.IndexOf("x64") == -1)
+                if (source.IndexOf("x64") == -1 && validateStackTraceInfo)
                 {
+                    if (string.IsNullOrWhiteSpace(testFound.ErrorStackTrace))
+                    {
+                        Assert.Fail($"The test failure {testFound.DisplayName} with message {testFound.ErrorMessage} lacks stacktrace");
+                    }
+
                     // Verify stack information as well.
                     Assert.IsTrue(testFound.ErrorStackTrace.Contains(GetTestMethodName(test)), "No stack trace for failed test: {0}", test);
                 }
@@ -214,7 +229,7 @@ namespace Microsoft.MSTestV2.CLIAutomation
             {
                 var testFound = this.runEventsHandler.SkippedTests.Any(s => test.Equals(s.TestCase.FullyQualifiedName) ||
                            test.Equals(s.DisplayName));
-                Assert.IsTrue(testFound, "Test {0} does not appear in skipped tests list.", test);
+                Assert.IsTrue(testFound, "Test '{0}' does not appear in skipped tests list.", test);
             }
         }
 

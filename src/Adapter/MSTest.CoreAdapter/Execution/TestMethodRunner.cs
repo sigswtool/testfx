@@ -11,7 +11,6 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution
     using System.Linq;
     using System.Reflection;
     using Extensions;
-    using Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter;
     using Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Helpers;
     using Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.ObjectModel;
     using Microsoft.VisualStudio.TestPlatform.MSTestAdapter.PlatformServices.Interface;
@@ -183,13 +182,14 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution
                     result = new[] { new UnitTestResult() };
                 }
 
-                var newResult =
-                    new UnitTestResult(new TestFailedException(UnitTestOutcome.Error, ex.TryGetMessage(), ex.TryGetStackTraceInformation()));
-                newResult.StandardOut = result[result.Length - 1].StandardOut;
-                newResult.StandardError = result[result.Length - 1].StandardError;
-                newResult.DebugTrace = result[result.Length - 1].DebugTrace;
-                newResult.TestContextMessages = result[result.Length - 1].TestContextMessages;
-                newResult.Duration = result[result.Length - 1].Duration;
+                var newResult = new UnitTestResult(new TestFailedException(UnitTestOutcome.Error, ex.TryGetMessage(), ex.TryGetStackTraceInformation()))
+                {
+                    StandardOut = result[result.Length - 1].StandardOut,
+                    StandardError = result[result.Length - 1].StandardError,
+                    DebugTrace = result[result.Length - 1].DebugTrace,
+                    TestContextMessages = result[result.Length - 1].TestContextMessages,
+                    Duration = result[result.Length - 1].Duration
+                };
                 result[result.Length - 1] = newResult;
             }
             finally
@@ -303,7 +303,7 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution
                 }
                 else
                 {
-                    UTF.ITestDataSource[] testDataSources = this.testMethodInfo.GetAttributes<Attribute>(true)?.Where(a => a is UTF.ITestDataSource).OfType<UTF.ITestDataSource>().ToArray();
+                    UTF.ITestDataSource[] testDataSources = this.testMethodInfo.GetAttributes<Attribute>(false)?.Where(a => a is UTF.ITestDataSource).OfType<UTF.ITestDataSource>().ToArray();
 
                     if (testDataSources != null && testDataSources.Length > 0)
                     {
@@ -404,7 +404,7 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution
         }
 
         /// <summary>
-        /// Updates given resutls with parent info if results are greater than 1.
+        /// Updates given results with parent info if results are greater than 1.
         /// Add parent results as first result in updated result.
         /// </summary>
         /// <param name="results">Results.</param>

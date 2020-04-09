@@ -11,7 +11,6 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Discovery
     using System.Linq;
     using System.Reflection;
     using System.Runtime.CompilerServices;
-    using global::MSTestAdapter.TestUtilities;
     using Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter;
     using Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Discovery;
     using Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Helpers;
@@ -25,6 +24,7 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Discovery
     using TestCleanup = FrameworkV1::Microsoft.VisualStudio.TestTools.UnitTesting.TestCleanupAttribute;
     using TestInitialize = FrameworkV1::Microsoft.VisualStudio.TestTools.UnitTesting.TestInitializeAttribute;
     using TestMethod = FrameworkV1::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute;
+    using TestMethodV2 = FrameworkV2::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute;
     using UTF = FrameworkV2::Microsoft.VisualStudio.TestTools.UnitTesting;
 
     [TestClass]
@@ -183,6 +183,82 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Discovery
                 "DummyDerivedFromRemoteTestClass inherits DummyRemoteBaseTestClass from different assembly. BestTestMethod from DummyRemoteBaseTestClass should not be discovered when RunSettings MSTestV2 specifies EnableBaseClassTestMethodsFromOtherAssemblies = false.");
         }
 
+        [TestMethod]
+        public void GetTestsShouldNotReturnHiddenTestMethods()
+        {
+            this.SetupTestClassAndTestMethods(isValidTestClass: true, isValidTestMethod: true, isMethodFromSameAssembly: true);
+            TypeEnumerator typeEnumerator = this.GetTypeEnumeratorInstance(typeof(DummyHidingTestClass), Assembly.GetExecutingAssembly().FullName);
+
+            var tests = typeEnumerator.Enumerate(out this.warnings);
+
+            Assert.IsNotNull(tests);
+            Assert.AreEqual(
+                1,
+                tests.Count(t => t.TestMethod.Name == "BaseTestMethod"),
+                "DummyHidingTestClass declares BaseTestMethod directly so it should always be discovered.");
+            Assert.AreEqual(
+                1,
+                tests.Count(t => t.TestMethod.Name == "DerivedTestMethod"),
+                "DummyHidingTestClass declares BaseTestMethod directly so it should always be discovered.");
+            Assert.IsFalse(
+                tests.Any(t => t.TestMethod.DeclaringClassFullName == typeof(DummyBaseTestClass).FullName),
+                "DummyHidingTestClass hides BaseTestMethod so declaring class should not be the base class");
+        }
+
+        [TestMethod]
+        public void GetTestsShouldReturnOverriddenTestMethods()
+        {
+            this.SetupTestClassAndTestMethods(isValidTestClass: true, isValidTestMethod: true, isMethodFromSameAssembly: true);
+            TypeEnumerator typeEnumerator = this.GetTypeEnumeratorInstance(typeof(DummyOverridingTestClass), Assembly.GetExecutingAssembly().FullName);
+
+            var tests = typeEnumerator.Enumerate(out this.warnings);
+
+            Assert.IsNotNull(tests);
+            Assert.AreEqual(
+                1,
+                tests.Count(t => t.TestMethod.Name == "BaseTestMethod"),
+                "DummyOverridingTestClass inherits BaseTestMethod so it should be discovered.");
+            Assert.AreEqual(
+                1,
+                tests.Count(t => t.TestMethod.Name == "DerivedTestMethod"),
+                "DummyOverridingTestClass overrides DerivedTestMethod directly so it should always be discovered.");
+            Assert.AreEqual(
+                typeof(DummyHidingTestClass).FullName,
+                tests.Single(t => t.TestMethod.Name == "BaseTestMethod").TestMethod.DeclaringClassFullName,
+                "DummyOverridingTestClass inherits BaseTestMethod from DummyHidingTestClass specifically.");
+            Assert.IsNull(
+                tests.Single(t => t.TestMethod.Name == "DerivedTestMethod").TestMethod.DeclaringClassFullName,
+                "DummyOverridingTestClass overrides DerivedTestMethod so is the declaring class.");
+        }
+
+        [TestMethod]
+        public void GetTestsShouldNotReturnHiddenTestMethodsFromAnyLevel()
+        {
+            this.SetupTestClassAndTestMethods(isValidTestClass: true, isValidTestMethod: true, isMethodFromSameAssembly: true);
+            TypeEnumerator typeEnumerator = this.GetTypeEnumeratorInstance(typeof(DummySecondHidingTestClass), Assembly.GetExecutingAssembly().FullName);
+
+            var tests = typeEnumerator.Enumerate(out this.warnings);
+
+            Assert.IsNotNull(tests);
+            Assert.AreEqual(
+                1,
+                tests.Count(t => t.TestMethod.Name == "BaseTestMethod"),
+                "DummySecondHidingTestClass hides BaseTestMethod so it should be discovered.");
+            Assert.AreEqual(
+                1,
+                tests.Count(t => t.TestMethod.Name == "DerivedTestMethod"),
+                "DummySecondHidingTestClass hides DerivedTestMethod so it should be discovered.");
+            Assert.IsFalse(
+                tests.Any(t => t.TestMethod.DeclaringClassFullName == typeof(DummyBaseTestClass).FullName),
+                "DummySecondHidingTestClass hides all base test methods so declaring class should not be any base class");
+            Assert.IsFalse(
+                tests.Any(t => t.TestMethod.DeclaringClassFullName == typeof(DummyHidingTestClass).FullName),
+                "DummySecondHidingTestClass hides all base test methods so declaring class should not be any base class");
+            Assert.IsFalse(
+                tests.Any(t => t.TestMethod.DeclaringClassFullName == typeof(DummyOverridingTestClass).FullName),
+                "DummySecondHidingTestClass hides all base test methods so declaring class should not be any base class");
+        }
+
         #endregion
 
         #region GetTestFromMethod tests
@@ -247,7 +323,7 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Discovery
             var testCategories = new string[] { "foo", "bar" };
 
             // Setup mocks
-            this.mockReflectHelper.Setup(rh => rh.GetCategories(methodInfo)).Returns(testCategories);
+            this.mockReflectHelper.Setup(rh => rh.GetCategories(methodInfo, typeof(DummyTestClass))).Returns(testCategories);
 
             var testElement = typeEnumerator.GetTestFromMethod(methodInfo, true, this.warnings);
 
@@ -346,6 +422,58 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Discovery
         }
 
         [TestMethod]
+        public void GetTestFromMethodShouldSetDescription()
+        {
+            this.SetupTestClassAndTestMethods(isValidTestClass: true, isValidTestMethod: true, isMethodFromSameAssembly: true);
+            TypeEnumerator typeEnumerator = this.GetTypeEnumeratorInstance(typeof(DummyTestClass), "DummyAssemblyName");
+            var methodInfo = typeof(DummyTestClass).GetMethod("MethodWithVoidReturnType");
+            this.mockReflectHelper.Setup(rh => rh.GetCustomAttribute(methodInfo, typeof(UTF.DescriptionAttribute))).Returns(new UTF.DescriptionAttribute("Dummy description"));
+
+            var testElement = typeEnumerator.GetTestFromMethod(methodInfo, true, this.warnings);
+
+            Assert.AreEqual("Dummy description", testElement.Description);
+        }
+
+        [TestMethod]
+        public void GetTestFromMethodShouldSetWorkItemIds()
+        {
+            this.SetupTestClassAndTestMethods(isValidTestClass: true, isValidTestMethod: true, isMethodFromSameAssembly: true);
+            TypeEnumerator typeEnumerator = this.GetTypeEnumeratorInstance(typeof(DummyTestClass), "DummyAssemblyName");
+            var methodInfo = typeof(DummyTestClass).GetMethod("MethodWithVoidReturnType");
+            this.mockReflectHelper.Setup(rh => rh.GetCustomAttributes(methodInfo, typeof(UTF.WorkItemAttribute))).Returns(new UTF.WorkItemAttribute[] { new UTF.WorkItemAttribute(123), new UTF.WorkItemAttribute(345) });
+
+            var testElement = typeEnumerator.GetTestFromMethod(methodInfo, true, this.warnings);
+
+            CollectionAssert.AreEqual(new string[] { "123", "345" }, testElement.WorkItemIds);
+        }
+
+        [TestMethod]
+        public void GetTestFromMethodShouldSetCssIteration()
+        {
+            this.SetupTestClassAndTestMethods(isValidTestClass: true, isValidTestMethod: true, isMethodFromSameAssembly: true);
+            TypeEnumerator typeEnumerator = this.GetTypeEnumeratorInstance(typeof(DummyTestClass), "DummyAssemblyName");
+            var methodInfo = typeof(DummyTestClass).GetMethod("MethodWithVoidReturnType");
+            this.mockReflectHelper.Setup(rh => rh.GetCustomAttribute(methodInfo, typeof(UTF.CssIterationAttribute))).Returns(new UTF.CssIterationAttribute("234"));
+
+            var testElement = typeEnumerator.GetTestFromMethod(methodInfo, true, this.warnings);
+
+            Assert.AreEqual("234", testElement.CssIteration);
+        }
+
+        [TestMethod]
+        public void GetTestFromMethodShouldSetCssProjectStructure()
+        {
+            this.SetupTestClassAndTestMethods(isValidTestClass: true, isValidTestMethod: true, isMethodFromSameAssembly: true);
+            TypeEnumerator typeEnumerator = this.GetTypeEnumeratorInstance(typeof(DummyTestClass), "DummyAssemblyName");
+            var methodInfo = typeof(DummyTestClass).GetMethod("MethodWithVoidReturnType");
+            this.mockReflectHelper.Setup(rh => rh.GetCustomAttribute(methodInfo, typeof(UTF.CssProjectStructureAttribute))).Returns(new UTF.CssProjectStructureAttribute("ProjectStructure123"));
+
+            var testElement = typeEnumerator.GetTestFromMethod(methodInfo, true, this.warnings);
+
+            Assert.AreEqual("ProjectStructure123", testElement.CssProjectStructure);
+        }
+
+        [TestMethod]
         public void GetTestFromMethodShouldSetDeploymentItemsToNullIfNotPresent()
         {
             this.SetupTestClassAndTestMethods(isValidTestClass: true, isValidTestMethod: true, isMethodFromSameAssembly: true);
@@ -401,6 +529,40 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Discovery
             Assert.AreEqual(otherAssemblyName, testElement.TestMethod.DeclaringAssemblyName);
         }
 
+        [TestMethod]
+        public void GetTestFromMethodShouldSetDisplayNameToTestMethodNameIfDisplayNameIsNotPresent()
+        {
+            this.SetupTestClassAndTestMethods(isValidTestClass: true, isValidTestMethod: true, isMethodFromSameAssembly: true);
+            TypeEnumerator typeEnumerator = this.GetTypeEnumeratorInstance(typeof(DummyTestClass), "DummyAssemblyName");
+            var methodInfo = typeof(DummyTestClass).GetMethod(nameof(DummyTestClass.MethodWithVoidReturnType));
+
+            // Setup mocks to behave like we have [TestMethod] attribute on the method
+            this.mockReflectHelper.Setup(
+                rh => rh.GetCustomAttribute(It.IsAny<MemberInfo>(), It.IsAny<Type>())).Returns(new TestMethodV2());
+
+            var testElement = typeEnumerator.GetTestFromMethod(methodInfo, true, this.warnings);
+
+            Assert.IsNotNull(testElement);
+            Assert.AreEqual("MethodWithVoidReturnType", testElement.DisplayName);
+        }
+
+        [TestMethod]
+        public void GetTestFromMethodShouldSetDisplayNameFromAttribute()
+        {
+            this.SetupTestClassAndTestMethods(isValidTestClass: true, isValidTestMethod: true, isMethodFromSameAssembly: true);
+            TypeEnumerator typeEnumerator = this.GetTypeEnumeratorInstance(typeof(DummyTestClass), "DummyAssemblyName");
+            var methodInfo = typeof(DummyTestClass).GetMethod(nameof(DummyTestClass.MethodWithVoidReturnType));
+
+            // Setup mocks to behave like we have [TestMethod("Test method display name.")] attribute on the method
+            this.mockReflectHelper.Setup(
+                rh => rh.GetCustomAttribute(methodInfo, typeof(TestMethodV2))).Returns(new TestMethodV2("Test method display name."));
+
+            var testElement = typeEnumerator.GetTestFromMethod(methodInfo, true, this.warnings);
+
+            Assert.IsNotNull(testElement);
+            Assert.AreEqual("Test method display name.", testElement.DisplayName);
+        }
+
         #endregion
 
         #region private methods
@@ -440,6 +602,35 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.UnitTests.Discovery
     public class DummyDerivedTestClass : DummyBaseTestClass
     {
         public void DerivedTestMethod()
+        {
+        }
+    }
+
+    public class DummyHidingTestClass : DummyBaseTestClass
+    {
+        public new virtual void BaseTestMethod()
+        {
+        }
+
+        public virtual void DerivedTestMethod()
+        {
+        }
+    }
+
+    public class DummyOverridingTestClass : DummyHidingTestClass
+    {
+        public override void DerivedTestMethod()
+        {
+        }
+    }
+
+    public class DummySecondHidingTestClass : DummyOverridingTestClass
+    {
+        public new void BaseTestMethod()
+        {
+        }
+
+        public new void DerivedTestMethod()
         {
         }
     }

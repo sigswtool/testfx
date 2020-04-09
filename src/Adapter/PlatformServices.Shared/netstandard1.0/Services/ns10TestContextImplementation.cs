@@ -4,11 +4,12 @@
 namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.PlatformServices
 {
     using System;
+    using System.Collections;
     using System.Collections.Generic;
     using System.Diagnostics;
     using System.Globalization;
     using System.IO;
-
+    using System.Threading;
     using Microsoft.VisualStudio.TestPlatform.MSTestAdapter.PlatformServices.Interface;
     using Microsoft.VisualStudio.TestPlatform.MSTestAdapter.PlatformServices.Interface.ObjectModel;
 
@@ -20,7 +21,7 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.PlatformServices
     /// Internal implementation of TestContext exposed to the user.
     /// </summary>
     /// <remarks>
-    /// The virtual string properties of the TestContext are retreived from the property dictionary
+    /// The virtual string properties of the TestContext are retrieved from the property dictionary
     /// like GetProperty&lt;string&gt;("TestName") or GetProperty&lt;string&gt;("FullyQualifiedTestClassName");
     /// </remarks>
     public class TestContextImplementation : UTF.TestContext, ITestContext
@@ -60,6 +61,7 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.PlatformServices
             this.testMethod = testMethod;
             this.properties = new Dictionary<string, object>(properties);
             this.stringWriter = writer;
+            this.CancellationTokenSource = new CancellationTokenSource();
             this.InitializeProperties();
         }
 
@@ -115,11 +117,11 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.PlatformServices
         /// An System.Collections.IDictionary object that contains key/value pairs that
         ///  represent the test properties.
         /// </returns>
-        public override IDictionary<string, object> Properties
+        public override IDictionary Properties
         {
             get
             {
-                return this.properties as IDictionary<string, object>;
+                return this.properties as IDictionary;
             }
         }
 
@@ -129,6 +131,19 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.PlatformServices
             {
                 return this as UTF.TestContext;
             }
+        }
+
+        /// <summary>
+        /// Adds a file name to the list in TestResult.ResultFileNames
+        /// </summary>
+        /// <param name="fileName">
+        /// The file Name.
+        /// </param>
+        public override void AddResultFile(string fileName)
+        {
+            // No-op function
+            // will be replaced at runtime time by PlatformServices Desktop/NetCore
+            // depending the target framework
         }
 
         /// <summary>
@@ -173,12 +188,50 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.PlatformServices
         }
 
         /// <summary>
-        /// Returning null as this feature is not supported in ASP .net and UWP
+        /// When overridden in a derived class, used to write trace messages while the
+        ///     test is running.
         /// </summary>
-        /// <returns>List of result files. Null presently.</returns>
-        public IList<string> GetResultFiles()
+        /// <param name="message">The formatted string that contains the trace message.</param>
+        public override void Write(string message)
         {
-            return null;
+            if (this.stringWriterDisposed)
+            {
+                return;
+            }
+
+            try
+            {
+                var msg = message?.Replace("\0", "\\0");
+                this.stringWriter.Write(msg);
+            }
+            catch (ObjectDisposedException)
+            {
+                this.stringWriterDisposed = true;
+            }
+        }
+
+        /// <summary>
+        /// When overridden in a derived class, used to write trace messages while the
+        ///     test is running.
+        /// </summary>
+        /// <param name="format">The string that contains the trace message.</param>
+        /// <param name="args">Arguments to add to the trace message.</param>
+        public override void Write(string format, params object[] args)
+        {
+            if (this.stringWriterDisposed)
+            {
+                return;
+            }
+
+            try
+            {
+                string message = string.Format(CultureInfo.CurrentCulture, format?.Replace("\0", "\\0"), args);
+                this.stringWriter.Write(message);
+            }
+            catch (ObjectDisposedException)
+            {
+                this.stringWriterDisposed = true;
+            }
         }
 
         /// <summary>
@@ -226,6 +279,15 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTestAdapter.PlatformServices
             {
                 this.stringWriterDisposed = true;
             }
+        }
+
+        /// <summary>
+        /// Returns null as this feature is not supported in ASP .net and UWP
+        /// </summary>
+        /// <returns>List of result files. Null presently.</returns>
+        public IList<string> GetResultFiles()
+        {
+            return null;
         }
 
         /// <summary>

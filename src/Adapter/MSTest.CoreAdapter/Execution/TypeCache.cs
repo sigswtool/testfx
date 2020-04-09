@@ -176,7 +176,7 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution
 
             if (!this.classInfoCache.TryGetValue(typeName, out TestClassInfo classInfo))
             {
-                // Aquiring a lock is usually a costly operation which does not need to be
+                // Acquiring a lock is usually a costly operation which does not need to be
                 // performed every time if the type is found in the cache.
                 lock (this.classInfoSyncObject)
                 {
@@ -275,6 +275,10 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution
             var classInitializeAttributeType = typeof(ClassInitializeAttribute);
             var classCleanupAttributeType = typeof(ClassCleanupAttribute);
 
+            // List holding the instance of the initialize/cleanup methods
+            // to be passed into the tuples' queue  when updating the class info.
+            var initAndCleanupMethods = new MethodInfo[2];
+
             // List of instance methods present in the type as well its base type
             // which is used to decide whether TestInitialize/TestCleanup methods
             // present in the base type should be used or not. They are not used if
@@ -286,16 +290,8 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution
                 // Update test initialize/cleanup method
                 this.UpdateInfoIfTestInitializeOrCleanupMethod(classInfo, methodInfo, isBase: false, instanceMethods: instanceMethods, testInitializeAttributeType: testInitializeAttributeType, testCleanupAttributeType: testCleanupAttributeType);
 
-                if (this.IsAssemblyOrClassInitializeMethod(methodInfo, classInitializeAttributeType))
-                {
-                    // update class initialize method
-                    classInfo.ClassInitializeMethod = methodInfo;
-                }
-                else if (this.IsAssemblyOrClassCleanupMethod(methodInfo, classCleanupAttributeType))
-                {
-                    // update class cleanup method
-                    classInfo.ClassCleanupMethod = methodInfo;
-                }
+                // Update class initialize/cleanup method
+                this.UpdateInfoIfClassInitializeOrCleanupMethod(classInfo, methodInfo, false, ref initAndCleanupMethods, classInitializeAttributeType, classCleanupAttributeType);
             }
 
             var baseType = classType.GetTypeInfo().BaseType;
@@ -308,8 +304,14 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution
                         // Update test initialize/cleanup method from base type.
                         this.UpdateInfoIfTestInitializeOrCleanupMethod(classInfo, methodInfo, true, instanceMethods, testInitializeAttributeType, testCleanupAttributeType);
                     }
+
+                    if (methodInfo.IsPublic && methodInfo.IsStatic)
+                    {
+                        this.UpdateInfoIfClassInitializeOrCleanupMethod(classInfo, methodInfo, true, ref initAndCleanupMethods, classInitializeAttributeType, classCleanupAttributeType);
+                    }
                 }
 
+                this.UpdateInfoWithInitializeAndCleanupMethods(classInfo, ref initAndCleanupMethods);
                 baseType = baseType.GetTypeInfo().BaseType;
             }
 
@@ -389,8 +391,9 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution
 
                         try
                         {
-                            // Only examine test classes for test attributes
-                            if (!this.reflectionHelper.IsAttributeDefined(t, typeof(TestClassAttribute), inherit: true))
+                            // Only examine classes which are TestClass or derives from TestClass attribute
+                            if (!this.reflectionHelper.IsAttributeDefined(t, typeof(TestClassAttribute), inherit: true) &&
+                                !this.reflectionHelper.HasAttributeDerivedFrom(t, typeof(TestClassAttribute), true))
                             {
                                 continue;
                             }
@@ -399,7 +402,7 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution
                         {
                             // If we fail to discover type from an assembly, then do not abort. Pick the next type.
                             PlatformServiceProvider.Instance.AdapterTraceLogger.LogWarning(
-                                "TypeCache: Exception occured while checking whether type {0} is a test class or not. {1}",
+                                "TypeCache: Exception occurred while checking whether type {0} is a test class or not. {1}",
                                 t.FullName,
                                 ex);
 
@@ -472,6 +475,81 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution
         }
 
         #endregion
+
+        /// <summary>
+        /// Update the classInfo with given initialize and cleanup methods.
+        /// </summary>
+        /// <param name="classInfo"> The Class Info. </param>
+        /// <param name="initAndCleanupMethods"> An array with the Initialize and Cleanup Methods Info. </param>
+        private void UpdateInfoWithInitializeAndCleanupMethods(
+            TestClassInfo classInfo,
+            ref MethodInfo[] initAndCleanupMethods)
+        {
+            if (initAndCleanupMethods.Any(x => x != null))
+            {
+                classInfo.BaseClassInitAndCleanupMethods.Enqueue(
+                        new Tuple<MethodInfo, MethodInfo>(
+                            initAndCleanupMethods.FirstOrDefault(),
+                            initAndCleanupMethods.LastOrDefault()));
+            }
+
+            initAndCleanupMethods = new MethodInfo[2];
+        }
+
+        /// <summary>
+        /// Update the classInfo if the parameter method is a classInitialize/cleanup method
+        /// </summary>
+        /// <param name="classInfo"> The Class Info. </param>
+        /// <param name="methodInfo"> The Method Info. </param>
+        /// <param name="isBase"> Flag to check whether base class needs to be validated. </param>
+        /// <param name="initAndCleanupMethods"> An array with Initialize/Cleanup methods. </param>
+        /// <param name="classInitializeAttributeType"> The Class Initialize Attribute Type. </param>
+        /// <param name="classCleanupAttributeType"> The Class Cleanup Attribute Type. </param>
+        private void UpdateInfoIfClassInitializeOrCleanupMethod(
+            TestClassInfo classInfo,
+            MethodInfo methodInfo,
+            bool isBase,
+            ref MethodInfo[] initAndCleanupMethods,
+            Type classInitializeAttributeType,
+            Type classCleanupAttributeType)
+        {
+            var isInitializeMethod = this.IsAssemblyOrClassInitializeMethod(methodInfo, classInitializeAttributeType);
+            var isCleanupMethod = this.IsAssemblyOrClassCleanupMethod(methodInfo, classCleanupAttributeType);
+
+            if (isInitializeMethod)
+            {
+                if (isBase)
+                {
+                    if (((ClassInitializeAttribute)this.reflectionHelper.GetCustomAttribute(methodInfo, classInitializeAttributeType))
+                            .InheritanceBehavior == InheritanceBehavior.BeforeEachDerivedClass)
+                    {
+                        initAndCleanupMethods[0] = methodInfo;
+                    }
+                }
+                else
+                {
+                    // update class initialize method
+                    classInfo.ClassInitializeMethod = methodInfo;
+                }
+            }
+
+            if (isCleanupMethod)
+            {
+                if (isBase)
+                {
+                    if (((ClassCleanupAttribute)this.reflectionHelper.GetCustomAttribute(methodInfo, classCleanupAttributeType))
+                            .InheritanceBehavior == InheritanceBehavior.BeforeEachDerivedClass)
+                    {
+                        initAndCleanupMethods[1] = methodInfo;
+                    }
+                }
+                else
+                {
+                    // update class cleanup method
+                    classInfo.ClassCleanupMethod = methodInfo;
+                }
+            }
+        }
 
         /// <summary>
         /// Update the classInfo if the parameter method is a testInitialize/cleanup method
@@ -605,10 +683,26 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution
         private MethodInfo GetMethodInfoForTestMethod(TestMethod testMethod, TestClassInfo testClassInfo)
         {
             var methodsInClass = testClassInfo.ClassType.GetRuntimeMethods().ToArray();
+            MethodInfo testMethodInfo;
 
-            var testMethodInfo =
-                methodsInClass.Where(method => method.Name.Equals(testMethod.Name))
-                    .FirstOrDefault(method => method.HasCorrectTestMethodSignature(true));
+            if (testMethod.DeclaringClassFullName != null)
+            {
+                // Only find methods that match the given declaring name.
+                testMethodInfo =
+                    methodsInClass.Where(method => method.Name.Equals(testMethod.Name)
+                                                && method.DeclaringType.FullName.Equals(testMethod.DeclaringClassFullName)
+                                                && method.HasCorrectTestMethodSignature(true)).FirstOrDefault();
+            }
+            else
+            {
+                // Either the declaring class is the same as the test class, or
+                // the declaring class information wasn't passed in the test case.
+                // Prioritize the former while maintaining previous behavior for the latter.
+                var className = testClassInfo.ClassType.FullName;
+                testMethodInfo =
+                    methodsInClass.Where(method => method.Name.Equals(testMethod.Name) && method.HasCorrectTestMethodSignature(true))
+                        .OrderByDescending(method => method.DeclaringType.FullName.Equals(className)).FirstOrDefault();
+            }
 
             // if correct method is not found, throw appropriate
             // exception about what is wrong.
@@ -626,7 +720,7 @@ namespace Microsoft.VisualStudio.TestPlatform.MSTest.TestAdapter.Execution
         /// </summary>
         /// <param name="methodInfo"> The method Info. </param>
         /// <param name="testMethod"> The test Method. </param>
-        /// <returns> The timeout value if defined. 0 if not defined. </returns>
+        /// <returns> The timeout value if defined in milliseconds. 0 if not defined. </returns>
         private int GetTestTimeout(MethodInfo methodInfo, TestMethod testMethod)
         {
             Debug.Assert(methodInfo != null, "TestMethod should be non-null");
